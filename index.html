@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="풍향계">
+<title>바람길 풍향계</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans+KR:wght@400;600&display=swap">
+<style>
+/* 한 화면 계기판: 위치 → 다이얼(나침반+풍향 화살) → 판독값 → 조작 버튼 */
+:root{
+  --bg:#e8edf1; --card:#f6f8fa; --ink:#13233a; --muted:#5a6a7c; --line:#c2ccd6;
+  --accent:#f0641a; /* 공항 윈드삭 오렌지 */
+  --sans:"IBM Plex Sans KR",-apple-system,"Apple SD Gothic Neo",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root{--bg:#0d1722; --card:#14202d; --ink:#e4ebf2; --muted:#8a99ab; --line:#2a3a4c; --accent:#ff7a2e; color-scheme:dark}
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{
+  background:var(--bg); color:var(--ink); font:15px/1.5 var(--sans);
+  display:flex; flex-direction:column; align-items:center;
+  padding-top:max(16px,env(safe-area-inset-top,0px));
+  padding-bottom:max(16px,env(safe-area-inset-bottom,0px));
+  padding-left:max(16px,env(safe-area-inset-left,0px));
+  padding-right:max(16px,env(safe-area-inset-right,0px));
+  -webkit-user-select:none; user-select:none;
+}
+main{width:100%;max-width:440px;flex:1;display:flex;flex-direction:column;gap:18px}
+header{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+h1{font-size:15px;font-weight:600;margin:0;letter-spacing:.02em}
+.loc{font:500 12px var(--mono);color:var(--muted);text-align:right}
+.dial{position:relative;width:100%;aspect-ratio:1;max-width:100%}
+.dial svg,.dial canvas{position:absolute;inset:0;width:100%;height:100%}
+.tick{stroke:var(--line);stroke-width:1.2}
+.tick.major{stroke:var(--muted);stroke-width:2}
+.card-txt{fill:var(--muted);font:500 13px var(--mono);text-anchor:middle;dominant-baseline:central}
+.card-txt.n{fill:var(--accent);font-size:16px}
+.ko{fill:var(--ink);font:600 15px var(--sans);text-anchor:middle;dominant-baseline:central}
+#vane{transition:transform 1.2s cubic-bezier(.3,.7,.2,1)}
+.readout{display:grid;grid-template-columns:1fr auto;gap:4px 16px;align-items:end}
+.dir{font-size:clamp(34px,11vw,46px);font-weight:600;line-height:1.05;letter-spacing:-.01em}
+.deg{font:500 15px var(--mono);color:var(--muted);text-align:right}
+.from{color:var(--muted);grid-column:1/-1}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.stat{padding:12px 0;display:flex;flex-direction:column;gap:2px;min-width:0}
+.stat+.stat{border-left:1px solid var(--line);padding-left:12px}
+.stat span{font-size:11px;letter-spacing:.06em;color:var(--muted)}
+.stat b{font:500 20px var(--mono);font-variant-numeric:tabular-nums}
+.stat b small{font-size:12px;color:var(--muted);margin-left:2px}
+.stat b.word{font:600 17px var(--sans)}
+.actions{display:flex;gap:10px;flex-wrap:wrap}
+button{
+  flex:1;min-width:140px;font:600 15px var(--sans);padding:14px 16px;border-radius:12px;
+  border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer
+}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.status{font-size:13px;color:var(--muted);min-height:1.5em;margin:0}
+.foot{font-size:11px;color:var(--muted);margin:auto 0 0}
+.foot a{color:inherit}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>바람길 풍향계</h1>
+    <div class="loc" id="loc">위치 찾는 중…</div>
+  </header>
+
+  <div class="dial" aria-label="풍향 다이얼">
+    <canvas id="flow"></canvas>
+    <svg viewBox="-200 -200 400 400" role="img" aria-hidden="true">
+      <!-- 폰 앞쪽 표시 (고정) -->
+      <path d="M0 -197 L9 -182 L-9 -182 Z" fill="var(--ink)"/>
+      <g id="rose">
+        <g id="ticks"></g>
+        <g id="vane" transform="rotate(0)">
+          <line x1="0" y1="118" x2="0" y2="-120" stroke="var(--ink)" stroke-width="5" stroke-linecap="round"/>
+          <path d="M0 -150 L18 -112 L0 -120 L-18 -112 Z" fill="var(--accent)"/>
+          <path d="M-4 70 L-42 132 L-4 120 Z M4 70 L42 132 L4 120 Z" fill="var(--ink)" opacity=".85"/>
+          <circle r="11" fill="var(--card)" stroke="var(--ink)" stroke-width="4"/>
+        </g>
+      </g>
+    </svg>
+  </div>
+
+  <section class="readout" aria-live="polite">
+    <div class="dir" id="dir">—</div>
+    <div class="deg" id="deg">—°</div>
+    <div class="from" id="from">바람 정보를 불러오는 중이에요.</div>
+  </section>
+
+  <section class="stats">
+    <div class="stat"><span>풍속</span><b id="spd">–<small>m/s</small></b></div>
+    <div class="stat"><span>순간최대</span><b id="gust">–<small>m/s</small></b></div>
+    <div class="stat"><span>풍력계급</span><b class="word" id="bft">–</b></div>
+  </section>
+
+  <div class="actions">
+    <button class="primary" id="compassBtn" type="button">나침반 켜기</button>
+    <button id="refreshBtn" type="button">새로고침</button>
+  </div>
+  <p class="status" id="status">나침반을 켜면 폰을 돌려도 화살이 실제 바람 쪽을 가리켜요.</p>
+
+  <p class="foot">주황 화살촉이 바람이 불어오는 쪽이에요. 날씨 데이터: <a href="https://open-meteo.com" target="_blank" rel="noopener">Open-Meteo</a> (지상 10m 기준, 15분 간격)</p>
+</main>
+
+<script>
+const $ = s => document.querySelector(s);
+const NAMES = ["북","북북동","북동","동북동","동","동남동","남동","남남동","남","남남서","남서","서남서","서","서북서","북서","북북서"];
+const CODES = ["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"];
+const BFT = [[0.3,"고요"],[1.6,"실바람"],[3.4,"남실바람"],[5.5,"산들바람"],[8,"건들바람"],[10.8,"흔들바람"],[13.9,"된바람"],[17.2,"센바람"],[20.8,"큰바람"],[24.5,"큰센바람"],[28.5,"노대바람"],[32.7,"왕바람"],[Infinity,"싹쓸바람"]];
+const FALLBACK = {lat:51.5074, lon:-0.1278, label:"런던 (기본 위치)"};
+const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+let target = 0, shown = 0, hasCompass = false;
+let wind = null; // {dir, speed, gust}
+let lastCoords = null;
+
+const norm = a => ((a % 360) + 360) % 360;
+const status = t => { $("#status").textContent = t; };
+
+/* 다이얼 눈금 */
+(function drawTicks(){
+  const g = $("#ticks"), NS = "http://www.w3.org/2000/svg";
+  for (let d = 0; d < 360; d += 5){
+    const major = d % 30 === 0, r1 = 178, r2 = major ? 162 : (d % 10 === 0 ? 168 : 172);
+    const a = d * Math.PI / 180, s = Math.sin(a), c = -Math.cos(a);
+    const l = document.createElementNS(NS, "line");
+    l.setAttribute("x1", r1*s); l.setAttribute("y1", r1*c);
+    l.setAttribute("x2", r2*s); l.setAttribute("y2", r2*c);
+    l.setAttribute("class", "tick" + (major ? " major" : ""));
+    g.appendChild(l);
+  }
+  [["N","북",0],["E","동",90],["S","남",180],["W","서",270]].forEach(([en,ko,d])=>{
+    const t = document.createElementNS(NS, "g");
+    t.setAttribute("transform", `rotate(${d})`);
+    t.innerHTML = `<text class="card-txt${d===0?" n":""}" x="0" y="-147">${en}</text><text class="ko" x="0" y="-126">${ko}</text>`;
+    g.appendChild(t);
+  });
+})();
+
+/* 나침반 */
+function onOrient(e){
+  let h = null;
+  if (typeof e.webkitCompassHeading === "number") h = e.webkitCompassHeading;     // iOS
+  else if (e.absolute && e.alpha != null) h = 360 - e.alpha;                       // Android
+  if (h == null) return;
+  const so = (screen.orientation && screen.orientation.angle) || window.orientation || 0;
+  target = norm(h + so);
+  if (!hasCompass){
+    hasCompass = true;
+    $("#compassBtn").hidden = true;
+    status("나침반이 켜졌어요. 폰을 평평하게 들고 돌려 보세요.");
+  }
+}
+async function enableCompass(){
+  try{
+    if (typeof DeviceOrientationEvent !== "undefined" && typeof DeviceOrientationEvent.requestPermission === "function"){
+      const r = await DeviceOrientationEvent.requestPermission();
+      if (r !== "granted"){ status("나침반 권한이 거부됐어요. 설정 › Safari › 동작 및 방향 접근을 켠 뒤 다시 눌러 주세요."); return; }
+    }
+    addEventListener("deviceorientationabsolute", onOrient, true);
+    addEventListener("deviceorientation", onOrient, true);
+    status("나침반 값을 기다리는 중…");
+    setTimeout(()=>{ if (!hasCompass) status("이 기기에서 나침반 값을 받지 못했어요. 북쪽을 위로 고정해서 보여 드릴게요."); }, 2500);
+  }catch(err){
+    status("나침반을 켤 수 없어요. 페이지가 https 주소에서 열렸는지 확인해 주세요.");
+  }
+}
+
+/* 위치 → 바람 */
+function locate(){
+  status(hasCompass ? $("#status").textContent : "현재 위치를 확인하는 중…");
+  if (!navigator.geolocation) return fetchWind(FALLBACK.lat, FALLBACK.lon, FALLBACK.label);
+  navigator.geolocation.getCurrentPosition(
+    p => fetchWind(p.coords.latitude, p.coords.longitude, "현재 위치"),
+    () => { fetchWind(FALLBACK.lat, FALLBACK.lon, FALLBACK.label); status("위치 권한이 없어 기본 위치의 바람을 보여 드려요."); },
+    {enableHighAccuracy:false, timeout:10000, maximumAge:300000}
+  );
+}
+async function fetchWind(lat, lon, label){
+  lastCoords = {lat, lon, label};
+  const fmt = (v, p, n) => `${Math.abs(v).toFixed(2)}°${v >= 0 ? p : n}`;
+  $("#loc").textContent = `${label} · ${fmt(lat,"N","S")} ${fmt(lon,"E","W")}`;
+  try{
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(4)}&longitude=${lon.toFixed(4)}&current=wind_speed_10m,wind_direction_10m,wind_gusts_10m&wind_speed_unit=ms&timezone=auto`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(res.status);
+    const c = (await res.json()).current;
+    wind = {dir:c.wind_direction_10m, speed:c.wind_speed_10m, gust:c.wind_gusts_10m, time:c.time};
+    render();
+  }catch(err){
+    $("#from").textContent = "바람 정보를 받지 못했어요. 인터넷 연결을 확인하고 새로고침을 눌러 주세요.";
+  }
+}
+function render(){
+  const i = Math.round(norm(wind.dir) / 22.5) % 16;
+  $("#dir").textContent = wind.speed < 0.3 ? "바람 없음" : NAMES[i] + "풍";
+  $("#deg").textContent = `${CODES[i]} ${Math.round(wind.dir)}°`;
+  const t = wind.time ? wind.time.slice(11,16) : "";
+  $("#from").textContent = wind.speed < 0.3 ? `지금은 거의 고요해요. (${t} 기준)` : `${NAMES[i]}쪽에서 불어오고 있어요. (${t} 기준)`;
+  $("#spd").innerHTML = `${wind.speed.toFixed(1)}<small>m/s</small>`;
+  $("#gust").innerHTML = `${wind.gust.toFixed(1)}<small>m/s</small>`;
+  const lvl = BFT.findIndex(([max]) => wind.speed < max);
+  $("#bft").textContent = `${lvl} ${BFT[lvl][1]}`;
+  $("#vane").setAttribute("transform", `rotate(${wind.dir})`);
+  $("#vane").style.transform = `rotate(${wind.dir}deg)`;
+}
+
+/* 바람 흐름 입자 + 회전 애니메이션 */
+const cv = $("#flow"), ctx = cv.getContext("2d");
+const parts = Array.from({length:70}, () => ({x:Math.random()*2-1, y:Math.random()*2-1, l:Math.random()}));
+function size(){ const r = cv.getBoundingClientRect(), d = devicePixelRatio || 1; cv.width = r.width*d; cv.height = r.height*d; }
+addEventListener("resize", size); size();
+
+function frame(){
+  let delta = ((target - shown + 540) % 360) - 180;
+  shown = norm(shown + delta * (reduceMotion ? 1 : 0.15));
+  $("#rose").setAttribute("transform", `rotate(${-shown})`);
+
+  const W = cv.width, R = W/2 * 0.78;
+  ctx.clearRect(0, 0, W, W);
+  if (wind && wind.speed >= 0.3 && !reduceMotion){
+    const a = (wind.dir + 180 - shown) * Math.PI / 180;      // 바람이 흘러가는 쪽 (화면 기준)
+    const vx = Math.sin(a), vy = -Math.cos(a);
+    const step = 0.004 + Math.min(wind.speed, 20) * 0.0016;
+    ctx.save();
+    ctx.beginPath(); ctx.arc(W/2, W/2, R, 0, Math.PI*2); ctx.clip();
+    ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue("--muted");
+    ctx.lineWidth = 1.5 * (devicePixelRatio || 1); ctx.lineCap = "round";
+    for (const p of parts){
+      p.x += vx*step; p.y += vy*step; p.l += 0.008;
+      if (p.x > 1.1 || p.x < -1.1 || p.y > 1.1 || p.y < -1.1 || p.l > 1){
+        p.x = Math.random()*2-1; p.y = Math.random()*2-1; p.l = 0;
+      }
+      const px = W/2 + p.x*R, py = W/2 + p.y*R, len = R*(0.05 + step*6);
+      ctx.globalAlpha = Math.sin(p.l*Math.PI) * 0.45;
+      ctx.beginPath(); ctx.moveTo(px - vx*len, py - vy*len); ctx.lineTo(px, py); ctx.stroke();
+    }
+    ctx.restore();
+  }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+$("#compassBtn").addEventListener("click", enableCompass);
+$("#refreshBtn").addEventListener("click", () => lastCoords ? fetchWind(lastCoords.lat, lastCoords.lon, lastCoords.label) : locate());
+setInterval(() => lastCoords && fetchWind(lastCoords.lat, lastCoords.lon, lastCoords.label), 10*60*1000);
+locate();
+</script>
+</body>
+</html>
