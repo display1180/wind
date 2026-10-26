@@ -1,11 +1,11 @@
 <!doctype html>
-<html lang="ko">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="풍향계">
-<title>바람길 풍향계 · Windpath Vane</title>
+<meta name="apple-mobile-web-app-title" content="Wind Vane">
+<title>Windpath Vane</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans+KR:wght@400;600&display=swap">
@@ -77,9 +77,9 @@ button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 <body>
 <main>
   <header>
-    <h1 data-i18n="title">바람길 풍향계</h1>
-    <button id="langBtn" type="button" aria-label="Language">EN</button>
-    <div class="loc" id="loc">위치 찾는 중…</div>
+    <h1 data-i18n="title">Windpath Vane</h1>
+    <button id="langBtn" type="button" aria-label="Language">한국어</button>
+    <div class="loc" id="loc">Finding your location…</div>
   </header>
 
   <div class="dial">
@@ -196,8 +196,8 @@ const T = {
     foot:"The orange tip points to where the wind comes from. Measuring uses your body as a windbreak: the mic hears the most wind when you face into it. Forecast (10 m above ground):"
   }
 };
-let lang = "ko";
-try{ lang = localStorage.getItem("vane-lang") || (/^ko/i.test(navigator.language) ? "ko" : "en"); }catch(e){ lang = /^ko/i.test(navigator.language) ? "ko" : "en"; }
+let lang = "en";   // 처음엔 항상 영어, 바꾼 언어는 기억해요
+try{ lang = localStorage.getItem("vane-lang") || "en"; }catch(e){}
 const L = () => T[lang];
 
 let statusState = ["intro"];
